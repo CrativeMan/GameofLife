@@ -44,7 +44,7 @@ public class Main extends JFrame implements MouseListener {
         System.out.println("New cell at: " + x + ", " + y);
         canvas.drawCell(canvas.getGraphics(), x-10, y-10);
         Cell cell = new Cell(x, y, true);
-        cells[x/10-10][y/10-10] = cell;
+        cells[x/10-10   ][y/10-10] = cell;
 
         // for loop to check if cell is in array
         System.out.println("Cells in array: ");
@@ -54,6 +54,7 @@ public class Main extends JFrame implements MouseListener {
                     System.out.println(value[j].getX() + ", " + value[j].getY() + ", is Alive:" + value[j].isAlive());
             }
         }
+        System.out.println("--------------------");
 
     }
 
