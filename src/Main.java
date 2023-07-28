@@ -1,93 +1,178 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
+import java.awt.event.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-class Canvas extends JComponent{
+public class Main extends JFrame {
 
-    public void paint(Graphics g){
-        drawGrid(g);
+    private final int rows;
+    private final int cols;
+    private boolean[][] grid;
+    private final int cellSize = 10;
+    private final int delay = 100;
+    private Timer timer;
+    private AtomicBoolean running = new AtomicBoolean(false);
+
+    public Main(int rows, int cols) {
+        this.rows = rows;
+        this.cols = cols;
+        this.grid = new boolean[rows][cols];
+        initializeBoard();
+        setupUI();
     }
 
-    public void drawGrid(Graphics g){
-        g.setColor(Color.BLACK);
-        for (int i = 0; i < 800; i += 10) {
-            g.drawLine(i, 0, i, 800);
-            g.drawLine(0, i, 800, i);
-        }
-    }
-
-    public void drawCell(Graphics g, int x, int y){
-        g.setColor(Color.darkGray);
-        g.fillRect(x, y, 10, 10);
-    }
-}
-
-public class Main extends JFrame implements MouseListener {
-
-    // cells array with size 80x80
-    public Cell[][] cells = new Cell[80][80];
-    public static Canvas canvas = new Canvas();
-
-    public static void main(String[] args) {
-        JFrame frame = new JFrame("Conways Game of Life");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(800, 800);
-        frame.getContentPane().add(canvas);
-        frame.setResizable(false);
-        frame.setLocationRelativeTo(null);
-        frame.addMouseListener(new Main());
-        frame.setVisible(true);
-    }
-
-    public void newCell(int x, int y){
-        System.out.println("New cell at: " + x + ", " + y);
-        canvas.drawCell(canvas.getGraphics(), x-10, y-10);
-        Cell cell = new Cell(x, y, true);
-        cells[x/10-10   ][y/10-10] = cell;
-
-        // for loop to check if cell is in array
-        System.out.println("Cells in array: ");
-        for (Cell[] value : cells) {
-            for (int j = 0; j < cells.length; j++) {
-                if (value[j] != null)
-                    System.out.println(value[j].getX() + ", " + value[j].getY() + ", is Alive:" + value[j].isAlive());
+    private void initializeBoard() {
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                grid[row][col] = false;
             }
         }
-        System.out.println("--------------------");
-
     }
 
-    @Override
-    public void mouseClicked(MouseEvent e) {
-        if (e.getButton() == MouseEvent.BUTTON1) {
-            int x = e.getX() + 10; // Adjust for the starting position of cells
-            int y = e.getY() + 10;
-            int roundedX = (x / 10) * 10;
-            int roundedY = (y / 10) * 10;
-            System.out.println("Clicked at: " + roundedX + ", " + roundedY);
-            newCell(roundedX, roundedY);
+    private void setupUI() {
+        setTitle("Game of Life");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(cols * cellSize, rows * cellSize);
+        setLocationRelativeTo(null);
+        setResizable(false);
+
+        JPanel panel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                drawGrid(g);
+                drawCells(g);
+            }
+        };
+
+        panel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                int row = e.getY() / cellSize;
+                int col = e.getX() / cellSize;
+                if (row >= 0 && row < rows && col >= 0 && col < cols) {
+                    grid[row][col] = !grid[row][col];
+                    panel.repaint();
+                }
+            }
+        });
+
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    running.set(!running.get());
+                    if (running.get()) {
+                        startSimulation();
+                    } else {
+                        stopSimulation();
+                    }
+                } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                    resetBoard();
+                    panel.repaint();
+                } else if (e.getKeyCode() == KeyEvent.VK_R) {
+                    randomizeBoard();
+                    panel.repaint();
+                }
+            }
+        });
+
+        setFocusable(true);
+        requestFocusInWindow();
+
+        timer = new Timer(delay, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (running.get()) {
+                    evolve();
+                    panel.repaint();
+                }
+            }
+        });
+
+        add(panel);
+        setVisible(true);
+    }
+
+    private void drawGrid(Graphics g) {
+        g.setColor(Color.GRAY);
+        for (int row = 0; row <= rows; row++) {
+            int y = row * cellSize;
+            g.drawLine(0, y, cols * cellSize, y);
+        }
+
+        for (int col = 0; col <= cols; col++) {
+            int x = col * cellSize;
+            g.drawLine(x, 0, x, rows * cellSize);
         }
     }
 
-
-    @Override
-    public void mousePressed(MouseEvent e) {
-
+    private void drawCells(Graphics g) {
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                if (grid[row][col]) {
+                    g.setColor(Color.GREEN);
+                    g.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+                }
+            }
+        }
     }
 
-    @Override
-    public void mouseReleased(MouseEvent e) {
-
+    private int countAliveNeighbors(int row, int col) {
+        int count = 0;
+        for (int i = -1; i <= 1; i++) {
+            for (int j = -1; j <= 1; j++) {
+                if (i == 0 && j == 0) continue;
+                int r = row + i;
+                int c = col + j;
+                if (r >= 0 && r < rows && c >= 0 && c < cols && grid[r][c]) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
-    @Override
-    public void mouseEntered(MouseEvent e) {
+    private void evolve() {
+        boolean[][] newGrid = new boolean[rows][cols];
 
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                int neighbors = countAliveNeighbors(row, col);
+                if (grid[row][col]) {
+                    newGrid[row][col] = neighbors == 2 || neighbors == 3;
+                } else {
+                    newGrid[row][col] = neighbors == 3;
+                }
+            }
+        }
+
+        grid = newGrid;
     }
 
-    @Override
-    public void mouseExited(MouseEvent e) {
+    private void startSimulation() {
+        timer.start();
+    }
 
+    private void stopSimulation() {
+        timer.stop();
+    }
+
+    private void resetBoard() {
+        initializeBoard();
+    }
+
+    private void randomizeBoard() {
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                grid[row][col] = Math.random() < 0.5; // Adjust the probability for live cells
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            Main game = new Main(100, 100);
+        });
     }
 }
